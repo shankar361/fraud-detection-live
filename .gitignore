@@ -1,0 +1,26 @@
+# Ignore .env files
+.env
+engine/.env
+
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+
+# Ignore node_modules
+FE/node_modules/
+generator/node_modules/
+
+# Ignore lock files
+FE/package-lock.json
+
+# Ignore build artifacts
+FE/dist/
+FE/build/
+
+# Ignore IDE files
+.idea/
+.vscode/
+
+# Ignore editor settings
+.DS_Store
+Thumbs.db

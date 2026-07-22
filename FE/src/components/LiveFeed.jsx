@@ -15,15 +15,14 @@ function formatTime(isoStr) {
   });
 }
 
-function TxnRow({ result }) {
+function TxnRow({ result, isExpanded, onToggle }) {
   const { transaction, risk_score, is_flagged, reasons, explanation } = result;
-  const [isExpanded, setIsExpanded] = useState(false);
   const payMethod = transaction.payment_method?.replace("card_ending_", "···") ?? "—";
   
   return (
     <div 
       className={`txn-row clickable ${is_flagged ? "flagged" : ""} ${isExpanded ? "expanded" : ""}`}
-      onClick={() => setIsExpanded(!isExpanded)}
+      onClick={onToggle}
     >
       <span className="ts">{formatTime(transaction.timestamp)}</span>
       <span className="uid">{transaction.user_id}</span>
@@ -81,6 +80,12 @@ function TxnRow({ result }) {
 }
 
 export default function LiveFeed({ feed }) {
+  const [expandedTxnId, setExpandedTxnId] = useState(null);
+
+  const handleToggle = (id) => {
+    setExpandedTxnId((prevId) => (prevId === id ? null : id));
+  };
+
   return (
     <div className="feed-col">
       <div className="col-title">
@@ -100,7 +105,12 @@ export default function LiveFeed({ feed }) {
         <div className="empty-state">Waiting for transactions…</div>
       )}
       {feed.map((result) => (
-        <TxnRow key={result.transaction.transaction_id} result={result} />
+        <TxnRow
+          key={result.transaction.transaction_id}
+          result={result}
+          isExpanded={expandedTxnId === result.transaction.transaction_id}
+          onToggle={() => handleToggle(result.transaction.transaction_id)}
+        />
       ))}
     </div>
   );

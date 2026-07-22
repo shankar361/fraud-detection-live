@@ -8,13 +8,14 @@ Run with:
 Requires the engine to already be running on http://localhost:8000
 """
 
+import os
 import random
 import time
 import uuid
-import requests
 from datetime import datetime, timezone
+import requests
 
-ENGINE_URL = "http://localhost:8000/transactions"
+ENGINE_URL = os.getenv("ENGINE_URL", "https://fraud-detection-backend-mu.vercel.app/transactions")
 
 MERCHANT_CATEGORIES = ["groceries", "electronics", "dining", "fuel", "e-commerce", "travel", "gift_cards"]
 MERCHANTS = {
@@ -102,7 +103,7 @@ class SyntheticUser:
 
 def send(txn: dict):
     try:
-        resp = requests.post(ENGINE_URL, json=txn, timeout=3)
+        resp = requests.post(ENGINE_URL, json=txn, timeout=10)
         if not resp.ok:
             print(f"[error] engine returned HTTP {resp.status_code}: {resp.text[:300]}")
             return
@@ -111,7 +112,7 @@ def send(txn: dict):
         print(f"{flag}  {txn['user_id']:10s} Rs.{txn['amount']:>9.0f}  {txn['location']['city']:10s} "
               f"risk={result.get('risk_score')}  {result.get('reasons')}")
     except requests.exceptions.ConnectionError:
-        print(f"[error] could not reach engine at {ENGINE_URL} — is uvicorn running?")
+        print(f"[error] could not reach engine at {ENGINE_URL} — check URL and server status.")
     except requests.exceptions.RequestException as e:
         print(f"[error] request failed: {e}")
 

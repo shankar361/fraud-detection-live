@@ -27,8 +27,7 @@ from llm_explainer import explain_flag
 logger = logging.getLogger("fraud_engine")
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(name)s %(levelname)s — %(message)s", datefmt="%H:%M:%S")
 
-# n8n webhook — set N8N_WEBHOOK_URL in your .env or environment before starting uvicorn
-# e.g. N8N_WEBHOOK_URL=https://your-n8n-instance.com/webhook/fraud-alert
+
 N8N_WEBHOOK_URL: str | None = os.environ.get("N8N_WEBHOOK_URL")
 if N8N_WEBHOOK_URL:
     logger.info("n8n webhook configured: %s", N8N_WEBHOOK_URL)
@@ -38,7 +37,6 @@ else:
 app = FastAPI(title="Fraud Detection Engine")
 
 # Allow the React dashboard (likely on a different port) to connect freely.
-# Fine for a hackathon; lock this down for anything real.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

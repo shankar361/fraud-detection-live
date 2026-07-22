@@ -58,6 +58,10 @@ class GraphDelta(BaseModel):
     nodes: List[GraphNode] = []
     edges: List[GraphEdge] = []
     ring_alert: Optional[RingAlert] = None
+    ring_device_count: int = 0
+    ring_user_count: int = 0
+    ring_device_ids: List[str] = []
+    ring_user_ids: List[str] = []
 
 
 class FeedbackPayload(BaseModel):

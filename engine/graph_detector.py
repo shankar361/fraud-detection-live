@@ -28,6 +28,7 @@ graph = nx.Graph()
 # device_id -> list of (user_id, timestamp) — used to compute the
 # rolling "distinct users in the last N minutes" window per device.
 _device_user_events: dict[str, list] = defaultdict(list)
+_active_ring_devices: set[str] = set()
 
 
 def _parse_ts(ts: str) -> datetime:
@@ -74,15 +75,24 @@ def update_graph(user_id: str, device_id: str, timestamp: str):
         delta_edges.append({"source": user_id, "target": device_id})
 
     ring_alert = None
-    if len(distinct_users) >= RING_USER_THRESHOLD:
+    device_has_ring = len(distinct_users) >= RING_USER_THRESHOLD
+
+    if device_has_ring and device_id not in _active_ring_devices:
+        _active_ring_devices.add(device_id)
         ring_alert = {
             "device_id": device_id,
             "linked_users": distinct_users,
             "detected_at": timestamp,
         }
+    elif not device_has_ring and device_id in _active_ring_devices:
+        _active_ring_devices.remove(device_id)
 
     delta = {"nodes": delta_nodes, "edges": delta_edges}
     return delta, ring_alert
+
+
+def _active_ring_user_ids() -> set[str]:
+    return {u for device_id in _active_ring_devices for u, _ in _device_user_events.get(device_id, [])}
 
 
 def snapshot():
@@ -92,4 +102,13 @@ def snapshot():
         for n in graph.nodes
     ]
     edges = [{"source": u, "target": v} for u, v in graph.edges]
-    return {"nodes": nodes, "edges": edges}
+
+    active_ring_users = _active_ring_user_ids()
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "ring_device_count": len(_active_ring_devices),
+        "ring_user_count": len(active_ring_users),
+        "ring_device_ids": sorted(_active_ring_devices),
+        "ring_user_ids": sorted(active_ring_users),
+    }

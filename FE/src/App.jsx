@@ -1,4 +1,5 @@
 import Header from "./components/Header";
+import DemoControls from "./components/DemoControls";
 import LiveFeed from "./components/LiveFeed";
 import AlertsPanel from "./components/AlertsPanel";
 import GraphPanel from "./components/GraphPanel";
@@ -22,6 +23,7 @@ export default function App() {
   return (
     <div className="app">
       <Header connected={connected} stats={stats} />
+      <DemoControls />
       <main>
         <LiveFeed feed={feed} />
         <AlertsPanel alerts={alerts} onFeedback={sendFeedback} />

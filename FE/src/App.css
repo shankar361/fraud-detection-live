@@ -55,7 +55,7 @@
 }
 
 .header h1 {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0;
@@ -69,11 +69,58 @@
   background: #f1f5f9;
   padding: 4px 10px;
   border-radius: 6px;
+  margin-top: 6px;
+  display: inline-block;
 }
 
-.stats {
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 14px;
+  align-items: stretch;
+  width: min(100%, 620px);
+}
+
+.metric-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px 16px;
   display: flex;
-  gap: 32px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 120px;
+}
+
+.metric-label {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.metric-help {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.flagged-card {
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.ring-card {
+  border-color: rgba(79, 70, 229, 0.2);
+}
+
+.latency-card {
+  border-color: rgba(14, 165, 233, 0.2);
 }
 
 .stat {
@@ -107,6 +154,169 @@ main {
   padding: 24px 32px 16px;
   max-width: 1600px;
   margin: 0 auto;
+}
+
+.demo-controls {
+  max-width: 1600px;
+  margin: 16px auto 0;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  padding: 22px 26px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.demo-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.demo-label {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.demo-description {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.demo-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.demo-button {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 20px;
+  font-weight: 700;
+  color: #ffffff;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.demo-button:hover {
+  transform: translateY(-1px);
+}
+
+.ring-button {
+  background: #4f46e5;
+}
+
+.anomaly-button {
+  background: #0f766e;
+}
+
+.demo-message {
+  grid-column: 1 / -1;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.demo-message.success {
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.demo-message.error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.graph-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.graph-tooltip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.95);
+  color: white;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.2);
+}
+
+.graph-svg {
+  width: 100%;
+  height: 400px;
+  border-radius: 18px;
+  background: #fafbfc;
+}
+
+.graph-edge {
+  stroke: #cbd5e1;
+  stroke-width: 1.2px;
+}
+
+.graph-edge.ring-edge {
+  stroke: #f59e0b;
+  stroke-width: 2px;
+}
+
+.node circle,
+.node rect {
+  fill: #94a3b8;
+  stroke: #ffffff;
+  stroke-width: 1.6px;
+}
+
+.node .ring-node {
+  fill: #fb7185;
+}
+
+.node:hover circle,
+.node:hover rect {
+  transform: scale(1.1);
+}
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  border-radius: 999px;
+}
+
+.legend-swatch.user {
+  background: #94a3b8;
+}
+
+.legend-swatch.device {
+  background: #0ea5e9;
+}
+
+.legend-swatch.ring {
+  background: #f59e0b;
 }
 
 .feed-col, .alerts-col {
@@ -313,6 +523,162 @@ main {
   line-height: 1.6;
   color: var(--text);
   font-weight: 500;
+}
+
+.graph-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.graph-summary span {
+  background: #eef2ff;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.alert-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.alert-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
+}
+
+.alert-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.alert-header .uid {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.alert-amount {
+  display: inline-block;
+  margin-left: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.alert-score {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--flagged);
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 999px;
+  min-width: 70px;
+  text-align: center;
+}
+
+.alert-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+
+.alert-card .explanation {
+  margin: 0 0 14px 0;
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.raw-reasons summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.raw-reasons ul {
+  margin: 10px 0 0 18px;
+  padding: 0;
+  list-style: disc;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  flex: 1;
+  min-width: 140px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.confirm-button {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #3730a3;
+}
+
+.dismiss-button {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.selected {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.ring-alert-card {
+  border: 1px solid #e2e8f0;
+  padding: 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  background: #ffffff;
+}
+
+.ring-alert-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.ring-device {
+  color: var(--accent);
+}
+
+.ring-time {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.ring-users {
+  color: var(--text);
+  font-size: 13px;
 }
 
 @keyframes slideIn {

@@ -12,10 +12,12 @@ import random
 import time
 import uuid
 import requests
+from dotenv import load_dotenv
+load_dotenv()  
 from datetime import datetime, timezone
 
-#ENGINE_URL = "http://localhost:8000/transactions"
-ENGINE_URL= os.getenv("ENGINE_URL", "https://fraud-detection-be-ruddy.vercel.app/transactions") 
+ENGINE_URL= os.getenv("ENGINE_URL", "http://localhost:8000/transactions") 
+print(f"Using ENGINE_URL={ENGINE_URL}")
 MERCHANT_CATEGORIES = ["groceries", "electronics", "dining", "fuel", "e-commerce", "travel", "gift_cards"]
 MERCHANTS = {
     "groceries": ["BigBasket", "Local Kirana", "DMart"],
@@ -152,7 +154,7 @@ def main():
     print(f"Ring participants (will occasionally share a device): "
           f"{sorted(ring_participant_ids)}\n")
 
-    warm_up_ring(users, ring_participant_ids)
+    #warm_up_ring(users, ring_participant_ids)
 
     print(f"Starting transaction stream for {len(users)} synthetic users. Ctrl+C to stop.\n")
 

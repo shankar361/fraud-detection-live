@@ -31,10 +31,21 @@ export function useFraudStream() {
   const [connected, setConnected] = useState(false);
   const [feed, setFeed] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  const [stats, setStats] = useState({ total: 0, flagged: 0, rings_detected: 0 });
+  const [stats, setStats] = useState({
+    total: 0,
+    flagged: 0,
+    flagged_amount: 0,
+    flag_rate: 0,
+    false_positives: 0,
+    confirmed_fraud: 0,
+    rings_detected: 0,
+    avg_latency_ms: 0,
+  });
   const [graphNodes, setGraphNodes] = useState([]);
   const [graphEdges, setGraphEdges] = useState([]);
   const [ringAlerts, setRingAlerts] = useState([]);
+  const [ringDeviceIds, setRingDeviceIds] = useState(new Set());
+  const [ringUserIds, setRingUserIds] = useState(new Set());
 
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
@@ -47,6 +58,12 @@ export function useFraudStream() {
         if (!data) return;
         if (Array.isArray(data.nodes)) setGraphNodes(data.nodes);
         if (Array.isArray(data.edges)) setGraphEdges(data.edges);
+        if (Array.isArray(data.ring_device_ids)) {
+          setRingDeviceIds(new Set(data.ring_device_ids));
+        }
+        if (Array.isArray(data.ring_user_ids)) {
+          setRingUserIds(new Set(data.ring_user_ids));
+        }
         if (Array.isArray(data.ring_alerts)) setRingAlerts(data.ring_alerts);
       })
       .catch(() => {});
@@ -90,7 +107,7 @@ export function useFraudStream() {
           setStats(msg.stats);
         }
       } else if (msg.type === "graph") {
-        const { nodes = [], edges = [], ring_alert } = msg.data || {};
+        const { nodes = [], edges = [], ring_alert, ring_device_ids, ring_user_ids } = msg.data || {};
 
         if (nodes.length > 0) {
           setGraphNodes((prev) => {
@@ -106,6 +123,14 @@ export function useFraudStream() {
             const newEdges = edges.filter((e) => !existingKeys.has(`${e.source}-${e.target}`));
             return newEdges.length > 0 ? [...prev, ...newEdges] : prev;
           });
+        }
+
+        if (Array.isArray(ring_device_ids)) {
+          setRingDeviceIds(new Set(ring_device_ids));
+        }
+
+        if (Array.isArray(ring_user_ids)) {
+          setRingUserIds(new Set(ring_user_ids));
         }
 
         if (ring_alert) {
@@ -162,9 +187,6 @@ export function useFraudStream() {
       // Best-effort for a hackathon demo — silently ignore network hiccups.
     });
   }, []);
-
-  const ringDeviceIds = new Set(ringAlerts.map((a) => a.device_id));
-  const ringUserIds = new Set(ringAlerts.flatMap((a) => a.linked_users || []));
 
   return {
     connected,

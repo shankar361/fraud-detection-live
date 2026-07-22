@@ -20,6 +20,8 @@ const HEIGHT = 380;
  */
 export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds }) {
   const svgRef = useRef(null);
+  const containerRef = useRef(null);
+  const tooltipRef = useRef(null);
   const stateRef = useRef(null); // holds simulation + selections, set up once
   const nodeMapRef = useRef(new Map()); // id -> persistent datum (keeps x/y stable across updates)
 
@@ -108,6 +110,34 @@ export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds }) 
         sel.append("circle").attr("r", 7);
       }
       sel.append("title").text(d.id);
+    })
+    .on("mouseenter", function (event, d) {
+      const tooltip = d3.select(tooltipRef.current);
+      const containerRect = containerRef.current.getBoundingClientRect();
+      tooltip
+        .style("display", "block")
+        .style("left", `${event.clientX - containerRect.left + 12}px`)
+        .style("top", `${event.clientY - containerRect.top + 12}px`)
+        .html(`<strong>${d.type.toUpperCase()}</strong><br/>${d.id}`);
+
+      d3.select(this)
+        .select(d.type === "device" ? "rect" : "circle")
+        .attr("stroke", "#f59e0b")
+        .attr("stroke-width", 3);
+    })
+    .on("mousemove", function (event) {
+      const tooltip = d3.select(tooltipRef.current);
+      const containerRect = containerRef.current.getBoundingClientRect();
+      tooltip
+        .style("left", `${event.clientX - containerRect.left + 12}px`)
+        .style("top", `${event.clientY - containerRect.top + 12}px`);
+    })
+    .on("mouseleave", function (event, d) {
+      d3.select(tooltipRef.current).style("display", "none");
+      d3.select(this)
+        .select(d.type === "device" ? "rect" : "circle")
+        .attr("stroke", null)
+        .attr("stroke-width", null);
     });
 
     applyRingStyling();
@@ -140,12 +170,15 @@ export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds }) 
   }
 
   return (
-    <svg
-      ref={svgRef}
-      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      className="graph-svg"
-      role="img"
-      aria-label="Live graph of users and devices, with fraud rings highlighted"
-    />
+    <div className="graph-container" ref={containerRef}>
+      <div ref={tooltipRef} className="graph-tooltip" style={{ display: "none" }} />
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        className="graph-svg"
+        role="img"
+        aria-label="Live graph of users and devices, with fraud rings highlighted"
+      />
+    </div>
   );
 }

@@ -19,6 +19,9 @@ Run with:
 
 import time
 import asyncio
+import random
+import uuid
+from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
@@ -27,7 +30,7 @@ import os
 import logging
 import httpx
 
-from schemas import Transaction, RiskResult, FeedbackPayload, AlertFlagPayload, RingAlert, GraphDelta
+from schemas import Location, Transaction, RiskResult, FeedbackPayload, AlertFlagPayload, RingAlert, GraphDelta
 from rules import score_transaction
 import graph_detector
 from llm_explainer import explain_flag
@@ -93,6 +96,201 @@ def _build_alert_payload(txn: Transaction, score: float, is_flagged: bool, reaso
         explanation=explanation,
     )
     return json.loads(payload.model_dump_json())
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _build_demo_transaction(
+    transaction_id: str,
+    user_id: str,
+    amount: float,
+    merchant: str,
+    merchant_category: str,
+    city: str,
+    country: str,
+    lat: float,
+    lon: float,
+    device_id: str,
+) -> Transaction:
+    return Transaction(
+        transaction_id=transaction_id,
+        user_id=user_id,
+        amount=amount,
+        currency="INR",
+        merchant=merchant,
+        merchant_category=merchant_category,
+        location=Location(city=city, country=country, lat=lat, lon=lon),
+        timestamp=_now_iso(),
+        device_id=device_id,
+        payment_method=f"card_ending_{random.randint(1000, 9999)}",
+    )
+
+
+async def _process_transaction(txn: Transaction) -> RiskResult:
+    start = time.perf_counter()
+
+    score, reasons, triggered = score_transaction(txn)
+    delta, ring_alert = graph_detector.update_graph(txn.user_id, txn.device_id, txn.timestamp)
+
+    ring_flag = None
+    if ring_alert:
+        ring_flag = RingAlert(**ring_alert)
+        linked = ", ".join(ring_alert["linked_users"])
+        reasons = reasons + [
+            f"Device shared by {len(ring_alert['linked_users'])} distinct users in the last "
+            f"{graph_detector.RING_WINDOW_MINUTES} min: {linked}"
+        ]
+        triggered = triggered + ["fraud_ring"]
+        score = max(score, RING_FORCE_SCORE)
+        stats.record_ring()
+
+    is_flagged = score >= FLAG_THRESHOLD
+    explanation = None
+    if is_flagged:
+        explanation = await explain_flag(
+            user_id=txn.user_id,
+            amount=txn.amount,
+            merchant=txn.merchant,
+            reasons=reasons,
+        )
+
+    latency_ms = (time.perf_counter() - start) * 1000
+    stats.record_transaction(txn, is_flagged, latency_ms)
+
+    result = RiskResult(
+        transaction=txn,
+        risk_score=round(score, 3),
+        is_flagged=is_flagged,
+        reasons=reasons,
+        triggered_rules=triggered,
+        explanation=explanation,
+        ring_flag=ring_flag,
+    )
+
+    await manager.broadcast({
+        "type": "transaction",
+        "data": json.loads(result.model_dump_json()),
+        "stats": stats.snapshot(),
+    })
+
+    if delta["nodes"] or delta["edges"] or ring_alert:
+        snapshot = graph_detector.snapshot()
+        graph_payload = GraphDelta(
+            nodes=delta["nodes"],
+            edges=delta["edges"],
+            ring_alert=ring_flag,
+            ring_device_count=snapshot["ring_device_count"],
+            ring_user_count=snapshot["ring_user_count"],
+            ring_device_ids=snapshot["ring_device_ids"],
+            ring_user_ids=snapshot["ring_user_ids"],
+        )
+        await manager.broadcast({
+            "type": "graph",
+            "data": json.loads(graph_payload.model_dump_json()),
+        })
+
+    if is_flagged:
+        alert_body = _build_alert_payload(txn, score, is_flagged, reasons, explanation)
+        asyncio.create_task(_fire_n8n_alert(alert_body))
+
+    return result
+
+
+async def _seed_baseline_for_user(user_id: str, device_id: str, category: str, merchant: str, city: str, country: str, lat: float, lon: float):
+    baseline_txn = _build_demo_transaction(
+        transaction_id=f"demo_baseline_{uuid.uuid4().hex[:8]}",
+        user_id=user_id,
+        amount=random.uniform(100, 300),
+        merchant=merchant,
+        merchant_category=category,
+        city=city,
+        country=country,
+        lat=lat,
+        lon=lon,
+        device_id=device_id,
+    )
+    return await _process_transaction(baseline_txn)
+
+
+@app.post("/demo/ring")
+async def demo_ring_attack():
+    device_id = "demo_shared_device"
+    demo_users = ["demo_ring_user_a", "demo_ring_user_b", "demo_ring_user_c"]
+    demo_city = "Mumbai"
+    lat, lon, country = 19.0760, 72.8777, "IN"
+    results = []
+
+    for idx, user_id in enumerate(demo_users, start=1):
+        txn = _build_demo_transaction(
+            transaction_id=f"demo_ring_{uuid.uuid4().hex[:8]}",
+            user_id=user_id,
+            amount=round(200 + idx * 50, 2),
+            merchant="Shared Mall",
+            merchant_category="e-commerce",
+            city=demo_city,
+            country=country,
+            lat=lat + random.uniform(-0.01, 0.01),
+            lon=lon + random.uniform(-0.01, 0.01),
+            device_id=device_id,
+        )
+        results.append(await _process_transaction(txn))
+        await asyncio.sleep(0.08)
+
+    return {
+        "status": "ok",
+        "demo": "ring",
+        "transactions": [r.transaction.transaction_id for r in results],
+    }
+
+
+@app.post("/demo/anomaly")
+async def demo_anomaly_injection():
+    user_id = "demo_anomaly_user"
+    device_id = "demo_device_01"
+    home_city = "Delhi"
+    lat, lon, country = 28.7041, 77.1025, "IN"
+
+    await _seed_baseline_for_user(
+        user_id=user_id,
+        device_id=device_id,
+        category="groceries",
+        merchant="Local Kirana",
+        city=home_city,
+        country=country,
+        lat=lat,
+        lon=lon,
+    )
+    await _seed_baseline_for_user(
+        user_id=user_id,
+        device_id=device_id,
+        category="groceries",
+        merchant="DMart",
+        city=home_city,
+        country=country,
+        lat=lat + 0.002,
+        lon=lon + 0.001,
+    )
+
+    anomalous = _build_demo_transaction(
+        transaction_id=f"demo_anom_{uuid.uuid4().hex[:8]}",
+        user_id=user_id,
+        amount=round(6000 + random.uniform(0, 1200), 2),
+        merchant="Luxury Travel",
+        merchant_category="travel",
+        city="Bangalore",
+        country="IN",
+        lat=12.9716,
+        lon=77.5946,
+        device_id=device_id,
+    )
+    result = await _process_transaction(anomalous)
+    return {
+        "status": "ok",
+        "demo": "anomaly",
+        "transaction_id": result.transaction.transaction_id,
+    }
 
 
 class Stats:
@@ -239,10 +437,15 @@ async def ingest_transaction(txn: Transaction):
     })
 
     if delta["nodes"] or delta["edges"] or ring_alert:
+        snapshot = graph_detector.snapshot()
         graph_payload = GraphDelta(
             nodes=delta["nodes"],
             edges=delta["edges"],
             ring_alert=ring_flag,
+            ring_device_count=snapshot["ring_device_count"],
+            ring_user_count=snapshot["ring_user_count"],
+            ring_device_ids=snapshot["ring_device_ids"],
+            ring_user_ids=snapshot["ring_user_ids"],
         )
         await manager.broadcast({
             "type": "graph",

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 const RAW_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-
+console.log("VITE_BACKEND_URL", RAW_BACKEND_URL);
+console.log("import.meta.env.VITE_BACKEND_URL", import.meta.env.VITE_BACKEND_URL);
 // Convert http(s) to ws(s) for WebSocket connection
 const getWsUrl = (url) => {
   let wsUrl = url.replace(/^http/, "ws");

@@ -7,7 +7,6 @@ Run with:
 
 Requires the engine to already be running on http://localhost:8000
 """
-
 import os
 import random
 import time
@@ -15,9 +14,8 @@ import uuid
 import requests
 from datetime import datetime, timezone
 
-
-# ENGINE_URL = os.getenv("ENGINE_URL", "https://fraud-detection-be-ruddy.vercel.app/transactions")
-ENGINE_URL = "http://localhost:8000/transactions"
+# ENGINE_URL = "http://localhost:8000/transactions"
+ENGINE_URL= os.getenv("ENGINE_URL", "https://fraud-detection-be-ruddy.vercel.app/transactions") 
 MERCHANT_CATEGORIES = ["groceries", "electronics", "dining", "fuel", "e-commerce", "travel", "gift_cards"]
 MERCHANTS = {
     "groceries": ["BigBasket", "Local Kirana", "DMart"],
@@ -122,6 +120,26 @@ def send(txn: dict):
         print(f"[error] could not reach engine: {e}")
 
 
+def warm_up_ring(users: list, ring_participant_ids: set):
+    """
+    Guarantees a ring fires almost immediately instead of leaving it to
+    chance. With only a handful of ring participants split across 2
+    shared devices and a per-tick probability of routing through one,
+    naturally accumulating 3 distinct users on the SAME device can
+    realistically take several minutes — too long for a live demo.
+    This fires 3 ring participants through the same shared device,
+    back to back, right at startup.
+    """
+    device = RING_DEVICE_IDS[0]
+    chosen = [u for u in users if u.user_id in ring_participant_ids][:3]
+    print(f"Forcing an early ring on {device} using {[u.user_id for u in chosen]} "
+          f"so you see a detection within the first few seconds...\n")
+    for u in chosen:
+        send(u.normal_transaction(device_override=device))
+        time.sleep(1.2)
+    print()
+
+
 def main():
     random.seed()
     users = [SyntheticUser(f"user_{i:03d}") for i in range(15)]
@@ -133,6 +151,8 @@ def main():
     ring_participant_ids = {u.user_id for u in ring_participants}
     print(f"Ring participants (will occasionally share a device): "
           f"{sorted(ring_participant_ids)}\n")
+
+    warm_up_ring(users, ring_participant_ids)
 
     print(f"Starting transaction stream for {len(users)} synthetic users. Ctrl+C to stop.\n")
 

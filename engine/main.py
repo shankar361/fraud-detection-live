@@ -90,6 +90,10 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+@app.get("/")
+async def root():
+    return {"message": "Backend is running"}
+    
 @app.get("/health")
 async def health():
     return {"status": "ok"}

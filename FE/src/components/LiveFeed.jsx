@@ -16,6 +16,7 @@ function formatTime(isoStr) {
 }
 
 function TxnRow({ result, isExpanded, onToggle }) {
+  if (!result || !result.transaction) return null;
   const { transaction, risk_score, is_flagged, reasons, explanation } = result;
   const payMethod = transaction.payment_method?.replace("card_ending_", "···") ?? "—";
   
@@ -89,7 +90,7 @@ export default function LiveFeed({ feed }) {
   return (
     <div className="feed-col">
       <div className="col-title">
-        <span>Live Feed</span>
+        <span>LIVE TRANSACTION FEED</span>
       </div>
       <div className="txn-header">
         <span>Time</span>
@@ -104,14 +105,18 @@ export default function LiveFeed({ feed }) {
       {feed.length === 0 && (
         <div className="empty-state">Waiting for transactions…</div>
       )}
-      {feed.map((result) => (
-        <TxnRow
-          key={result.transaction.transaction_id}
-          result={result}
-          isExpanded={expandedTxnId === result.transaction.transaction_id}
-          onToggle={() => handleToggle(result.transaction.transaction_id)}
-        />
-      ))}
+      {feed.map((result) => {
+        const txnId = result?.transaction?.transaction_id;
+        if (!txnId) return null;
+        return (
+          <TxnRow
+            key={txnId}
+            result={result}
+            isExpanded={expandedTxnId === txnId}
+            onToggle={() => handleToggle(txnId)}
+          />
+        );
+      })}
     </div>
   );
 }

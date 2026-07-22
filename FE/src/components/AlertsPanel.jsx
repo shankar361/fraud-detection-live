@@ -14,32 +14,43 @@ function AlertCard({ result, onFeedback }) {
   }
 
   return (
-    <div className="alert-card">
-      <div className="top-row">
-        <span className="uid">{transaction.user_id}</span>
-        <span className="score">risk {Math.round(risk_score * 100)}%</span>
+    <div className={`alert-card ${actionTaken || ''}`}>
+      <div className="alert-header">
+        <div>
+          <span className="uid">{transaction.user_id}</span>
+          <span className="alert-amount">₹{formatAmount(transaction.amount)}</span>
+        </div>
+        <div className="alert-score">{Math.round(risk_score * 100)}%</div>
       </div>
-      <div className="amt">
-        ₹{formatAmount(transaction.amount)} · {transaction.merchant} · {transaction.location.city}
+
+      <div className="alert-meta">
+        <span>{transaction.merchant}</span>
+        <span>•</span>
+        <span>{transaction.location.city}</span>
+        <span>•</span>
+        <span>{transaction.merchant_category}</span>
       </div>
+
       {explanation && <p className="explanation">{explanation}</p>}
+
       <details className="raw-reasons">
-        <summary>Raw signals</summary>
+        <summary>View triggered signals</summary>
         <ul>
           {reasons.map((reason, i) => (
             <li key={i}>{reason}</li>
           ))}
         </ul>
       </details>
+
       <div className="actions">
         <button
-          className={actionTaken && actionTaken !== "confirm" ? "dismissed" : ""}
+          className={actionTaken === "confirm" ? "selected" : "confirm-button"}
           onClick={() => handleClick("confirm")}
         >
           {actionTaken === "confirm" ? "Confirmed ✓" : "Confirm fraud"}
         </button>
         <button
-          className={actionTaken && actionTaken !== "dismiss" ? "dismissed" : ""}
+          className={actionTaken === "dismiss" ? "selected" : "dismiss-button"}
           onClick={() => handleClick("dismiss")}
         >
           {actionTaken === "dismiss" ? "Marked false positive ✓" : "Mark false positive"}

@@ -28,6 +28,12 @@ class Transaction(BaseModel):
     payment_method: str
 
 
+class RingAlert(BaseModel):
+    device_id: str
+    linked_users: List[str]
+    detected_at: str
+
+
 class RiskResult(BaseModel):
     transaction: Transaction
     risk_score: float          # 0.0 - 1.0
@@ -35,6 +41,27 @@ class RiskResult(BaseModel):
     reasons: List[str]         # human-readable triggered rules (raw)
     triggered_rules: List[str] # machine-readable rule ids
     explanation: Optional[str] = None  # LLM-generated one-liner, only set when flagged
+    ring_flag: Optional[RingAlert] = None  # set when this txn's device is part of a detected ring
+
+
+class GraphNode(BaseModel):
+    id: str
+    type: str  # "user" | "device"
+
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+
+
+class GraphDelta(BaseModel):
+    nodes: List[GraphNode] = []
+    edges: List[GraphEdge] = []
+    ring_alert: Optional[RingAlert] = None
+    ring_device_count: int = 0
+    ring_user_count: int = 0
+    ring_device_ids: List[str] = []
+    ring_user_ids: List[str] = []
 
 
 class FeedbackPayload(BaseModel):

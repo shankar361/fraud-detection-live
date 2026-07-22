@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 import requests
 
-ENGINE_URL = os.getenv("ENGINE_URL", "https://fraud-detection-backend-mu.vercel.app/transactions")
+ENGINE_URL = os.getenv("ENGINE_URL", "https://fraud-detection-be-ruddy.vercel.app/transactions")
 
 MERCHANT_CATEGORIES = ["groceries", "electronics", "dining", "fuel", "e-commerce", "travel", "gift_cards"]
 MERCHANTS = {

@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
-const WS_URL = "ws://localhost:8000/ws";
+const RAW_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://fraud-detection-be-ruddy.vercel.app";
+
+// Convert http(s) to ws(s) for WebSocket connection
+const getWsUrl = (url) => {
+  let wsUrl = url.replace(/^http/, "ws");
+  if (!wsUrl.endsWith("/ws")) {
+    wsUrl = wsUrl.replace(/\/$/, "") + "/ws";
+  }
+  return wsUrl;
+};
+
+const WS_URL = getWsUrl(RAW_BACKEND_URL);
+const FEEDBACK_URL = RAW_BACKEND_URL.replace(/\/$/, "") + "/feedback";
 const MAX_FEED_ROWS = 40;
 const MAX_ALERTS = 15;
 
@@ -64,7 +76,7 @@ export function useFraudStream() {
   }, []);
 
   const sendFeedback = useCallback((transactionId, isFalsePositive) => {
-    fetch("http://localhost:8000/feedback", {
+    fetch(FEEDBACK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

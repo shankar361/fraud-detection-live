@@ -90,7 +90,7 @@ export default function LiveFeed({ feed }) {
   return (
     <div className="feed-col">
       <div className="col-title">
-        <span>Live Feed</span>
+        <span>LIVE TRANSACTION FEED</span>
       </div>
       <div className="txn-header">
         <span>Time</span>

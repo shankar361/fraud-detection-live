@@ -22,6 +22,10 @@ export default function App() {
   return (
     <div className="app">
       <Header connected={connected} stats={stats} />
+      <main>
+        <LiveFeed feed={feed} />
+        <AlertsPanel alerts={alerts} onFeedback={sendFeedback} />
+      </main>
       <GraphPanel
         graphNodes={graphNodes}
         graphEdges={graphEdges}
@@ -30,10 +34,6 @@ export default function App() {
         ringAlerts={ringAlerts}
         ringsDetected={stats.rings_detected}
       />
-      <main>
-        <LiveFeed feed={feed} />
-        <AlertsPanel alerts={alerts} onFeedback={sendFeedback} />
-      </main>
     </div>
   );
 }

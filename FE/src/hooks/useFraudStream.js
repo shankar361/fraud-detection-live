@@ -17,7 +17,10 @@ const FEEDBACK_URL = `${BASE_HTTP_URL}/feedback`;
 const GRAPH_URL = `${BASE_HTTP_URL}/graph`;
 const MAX_FEED_ROWS = 40;
 const MAX_ALERTS = 15;
-
+console.log("WS_URL", WS_URL);
+console.log("BASE_HTTP_URL", BASE_HTTP_URL);
+console.log("FEEDBACK_URL", FEEDBACK_URL);
+console.log("GRAPH_URL", GRAPH_URL);  
 /**
  * Owns the WebSocket connection to the fraud engine and keeps
  * the running feed / alert / stat / graph state that the dashboard renders.

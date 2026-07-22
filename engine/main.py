@@ -177,6 +177,7 @@ async def health():
 
 @app.get("/graph")
 async def get_graph_snapshot():
+    print("in /graph")
     return graph_detector.snapshot()
 
 

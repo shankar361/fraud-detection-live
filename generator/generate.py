@@ -12,11 +12,12 @@ import os
 import random
 import time
 import uuid
-from datetime import datetime, timezone
 import requests
+from datetime import datetime, timezone
 
-ENGINE_URL = os.getenv("ENGINE_URL", "https://fraud-detection-be-ruddy.vercel.app/transactions")
 
+# ENGINE_URL = os.getenv("ENGINE_URL", "https://fraud-detection-be-ruddy.vercel.app/transactions")
+ENGINE_URL = "http://localhost:8000/transactions"
 MERCHANT_CATEGORIES = ["groceries", "electronics", "dining", "fuel", "e-commerce", "travel", "gift_cards"]
 MERCHANTS = {
     "groceries": ["BigBasket", "Local Kirana", "DMart"],
@@ -51,14 +52,15 @@ class SyntheticUser:
         self.preferred_categories = random.sample(MERCHANT_CATEGORIES, k=3)
         self.device_id = f"device_{uuid.uuid4().hex[:8]}"
 
-    def normal_transaction(self) -> dict:
+    def normal_transaction(self, device_override: str = None) -> dict:
         category = random.choice(self.preferred_categories)
         merchant = random.choice(MERCHANTS[category])
         lat, lon, country = CITIES[self.home_city]
         lat += random.uniform(-0.01, 0.01)
         lon += random.uniform(-0.01, 0.01)
         amount = round(random.uniform(*self.typical_amount_range), 2)
-        return self._build(category, merchant, self.home_city, lat, lon, country, amount, self.device_id)
+        device_id = device_override or self.device_id
+        return self._build(category, merchant, self.home_city, lat, lon, country, amount, device_id)
 
     def anomalous_transaction(self) -> dict:
         """Randomly picks one of several anomaly types."""
@@ -101,33 +103,50 @@ class SyntheticUser:
         }
 
 
+RING_DEVICE_IDS = ["device_ring_alpha", "device_ring_beta"]
+RING_PARTICIPANT_COUNT = 4  # how many of the synthetic users are "in on" each ring
+
+
 def send(txn: dict):
     try:
-        resp = requests.post(ENGINE_URL, json=txn, timeout=10)
-        if not resp.ok:
-            print(f"[error] engine returned HTTP {resp.status_code}: {resp.text[:300]}")
-            return
+        resp = requests.post(ENGINE_URL, json=txn, timeout=3)
         result = resp.json()
         flag = "FLAGGED" if result.get("is_flagged") else "   ok"
+        ring_tag = ""
+        if result.get("ring_flag"):
+            n = len(result["ring_flag"]["linked_users"])
+            ring_tag = f"  [RING: {n} users on {result['ring_flag']['device_id']}]"
         print(f"{flag}  {txn['user_id']:10s} Rs.{txn['amount']:>9.0f}  {txn['location']['city']:10s} "
-              f"risk={result.get('risk_score')}  {result.get('reasons')}")
-    except requests.exceptions.ConnectionError:
-        print(f"[error] could not reach engine at {ENGINE_URL} — check URL and server status.")
+              f"risk={result.get('risk_score')}  {result.get('reasons')}{ring_tag}")
     except requests.exceptions.RequestException as e:
-        print(f"[error] request failed: {e}")
+        print(f"[error] could not reach engine: {e}")
 
 
 def main():
     random.seed()
     users = [SyntheticUser(f"user_{i:03d}") for i in range(15)]
 
+    # Pick a handful of users to be "ring participants" — they occasionally
+    # transact from a shared device instead of their own, simulating a
+    # mule network / fake-account farm. Everyone else behaves normally.
+    ring_participants = random.sample(users, k=RING_PARTICIPANT_COUNT)
+    ring_participant_ids = {u.user_id for u in ring_participants}
+    print(f"Ring participants (will occasionally share a device): "
+          f"{sorted(ring_participant_ids)}\n")
+
     print(f"Starting transaction stream for {len(users)} synthetic users. Ctrl+C to stop.\n")
 
     while True:
         user = random.choice(users)
 
-        # ~12% chance of an anomalous transaction
-        if random.random() < 0.12:
+        if user.user_id in ring_participant_ids and random.random() < 0.35:
+            # Route this user's transaction through a shared "ring" device
+            # instead of their own — individually this txn looks completely
+            # normal, only the graph layer can see it's suspicious.
+            shared_device = random.choice(RING_DEVICE_IDS)
+            send(user.normal_transaction(device_override=shared_device))
+        elif random.random() < 0.12:
+            # ~12% chance of a per-transaction anomaly (unrelated to rings)
             if random.random() < 0.3:
                 # velocity burst: fire several transactions rapidly for this user
                 for _ in range(random.randint(3, 4)):

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+const BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:8000").replace(/\/+$|^$/, "");
 
 async function triggerDemo(path) {
   const response = await fetch(`${BACKEND_BASE}${path}`, { method: "POST" });

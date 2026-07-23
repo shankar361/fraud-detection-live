@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+const BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:8000").replace(/\/+$|^$/, "");
 const RULE_PARAM_CONFIG = {
   velocity: [
     { name: "window_seconds", label: "Window (seconds)", type: "number", step: 1, min: 1 },

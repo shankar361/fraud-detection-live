@@ -1,6 +1,5 @@
 import { useState } from "react";
 import Header from "./components/Header";
-import DemoControls from "./components/DemoControls";
 import RuleSettings from "./components/RuleSettings";
 import LiveFeed from "./components/LiveFeed";
 import AlertsPanel from "./components/AlertsPanel";
@@ -30,7 +29,6 @@ export default function App() {
         stats={stats}
         onToggleSettings={() => setSettingsOpen((open) => !open)}
       />
-      <DemoControls />
       <RuleSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <main>
         <LiveFeed feed={feed} />

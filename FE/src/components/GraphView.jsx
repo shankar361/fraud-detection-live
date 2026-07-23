@@ -18,7 +18,7 @@ const HEIGHT = 380;
  * the simulation" vs. "ring membership changed, just recolor" so a new
  * ring alert doesn't jolt the whole layout.
  */
-export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds }) {
+export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds, onZoomControlReady }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const tooltipRef = useRef(null);
@@ -52,17 +52,30 @@ export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds }) 
       nodeGroup.selectAll("g.node").attr("transform", (d) => `translate(${d.x},${d.y})`);
     });
 
-    svg.call(
-      d3
-        .zoom()
-        .scaleExtent([0.4, 2.5])
-        .on("zoom", (event) => g.attr("transform", event.transform))
-    );
+    const zoom = d3
+      .zoom()
+      .scaleExtent([0.4, 2.5])
+      .on("zoom", (event) => g.attr("transform", event.transform));
 
-    stateRef.current = { simulation, linkGroup, nodeGroup };
+    svg.call(zoom);
 
-    return () => simulation.stop();
-  }, []);
+    const resetZoom = () => {
+      svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+    };
+
+    if (typeof onZoomControlReady === "function") {
+      onZoomControlReady({ reset: resetZoom });
+    }
+
+    stateRef.current = { simulation, linkGroup, nodeGroup, zoom };
+
+    return () => {
+      simulation.stop();
+      if (typeof onZoomControlReady === "function") {
+        onZoomControlReady(null);
+      }
+    };
+  }, [onZoomControlReady]);
 
   // --- data changed: merge in new nodes/edges, restart the simulation ---
   useEffect(() => {

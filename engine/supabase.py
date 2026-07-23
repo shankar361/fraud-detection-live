@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 import httpx
 from dotenv import load_dotenv
 load_dotenv()
@@ -88,6 +89,58 @@ async def check_supabase_connection() -> dict[str, object]:
     except Exception as exc:
         logger.error("Supabase connectivity check failed: %s", exc)
         return {"configured": True, "connected": False, "error": str(exc)}
+
+
+async def fetch_transactions(limit: int = 40) -> list[dict]:
+    headers = _get_supabase_headers()
+    if not headers:
+        logger.warning("Supabase transaction history fetch skipped because config is missing")
+        return []
+
+    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TRANSACTIONS_TABLE}?select=*&order=created_at.desc&limit={limit}"
+    logger.info("Fetching Supabase transaction history from %s", url)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers)
+        #    logger.info("Supabase transaction history response code=%s body=%s", response.status_code, response.text)
+            response.raise_for_status()
+            data = response.json()
+            if isinstance(data, list):
+                return [normalize_transaction_row(row) for row in data]
+    except Exception as exc:
+        logger.error("Supabase transaction history fetch failed: %s", exc)
+    return []
+
+
+def normalize_transaction_row(row: dict) -> dict:
+    transaction = {
+        "transaction_id": row.get("transaction_id"),
+        "user_id": row.get("user_id"),
+        "amount": row.get("amount"),
+        "currency": row.get("currency"),
+        "merchant": row.get("merchant"),
+        "merchant_category": row.get("merchant_category"),
+        "location": row.get("location"),
+        "timestamp": row.get("timestamp"),
+        "device_id": row.get("device_id"),
+        "payment_method": row.get("payment_method"),
+    }
+
+    if isinstance(transaction.get("location"), str):
+        try:
+            transaction["location"] = json.loads(transaction["location"])
+        except Exception:
+            pass
+
+    return {
+        "transaction": transaction,
+        "risk_score": row.get("risk_score"),
+        "is_flagged": row.get("is_flagged"),
+        "reasons": row.get("reasons") or [],
+        "triggered_rules": row.get("triggered_rules") or [],
+        "explanation": row.get("explanation"),
+        "ring_flag": row.get("ring_flag"),
+    }
 
 
 def _build_supabase_transaction_payload(result: dict) -> dict:

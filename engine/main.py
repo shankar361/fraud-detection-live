@@ -32,7 +32,7 @@ import httpx
 
 from schemas import Location, Transaction, RiskResult, FeedbackPayload, AlertFlagPayload, RingAlert, GraphDelta
 from rules import score_transaction, get_rule_settings, save_rule_settings
-from supabase import persist_transaction, is_supabase_configured, check_supabase_connection
+from supabase import persist_transaction, is_supabase_configured, check_supabase_connection, fetch_transactions
 import graph_detector
 from llm_explainer import explain_flag
 
@@ -448,6 +448,11 @@ async def send_alert_flag(payload: AlertFlagPayload):
 async def supabase_status():
     status = await check_supabase_connection()
     return status
+
+
+@app.get("/transactions/history")
+async def transactions_history(limit: int = 40):
+    return await fetch_transactions(limit=limit)
 
 
 @app.post("/feedback")

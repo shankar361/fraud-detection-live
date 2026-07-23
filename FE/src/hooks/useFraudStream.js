@@ -16,7 +16,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || getWsUrl(RAW_BACKEND_URL);
 const BASE_HTTP_URL = RAW_BACKEND_URL.replace(/\/$/, "");
 const FEEDBACK_URL = `${BASE_HTTP_URL}/feedback`;
 const GRAPH_URL = `${BASE_HTTP_URL}/graph`;
-const MAX_FEED_ROWS = 40;
+const MAX_FEED_ROWS = 30;
 const MAX_ALERTS = 15;
 console.log("WS_URL", WS_URL);
 console.log("BASE_HTTP_URL", BASE_HTTP_URL);
@@ -65,6 +65,14 @@ export function useFraudStream() {
           setRingUserIds(new Set(data.ring_user_ids));
         }
         if (Array.isArray(data.ring_alerts)) setRingAlerts(data.ring_alerts);
+      })
+      .catch(() => {});
+
+    fetch(`${BASE_HTTP_URL}/transactions/history?limit=${MAX_FEED_ROWS}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        setFeed(data);
       })
       .catch(() => {});
   }, []);

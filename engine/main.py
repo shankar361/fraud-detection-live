@@ -22,6 +22,7 @@ import asyncio
 import random
 import uuid
 from datetime import datetime, timezone
+from collections import defaultdict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
@@ -325,6 +326,9 @@ class Stats:
     """Running totals for the impact-metrics panel."""
 
     def __init__(self):
+        self.reset()
+
+    def reset(self):
         self.total = 0
         self.flagged = 0
         self.flagged_amount = 0.0
@@ -444,6 +448,115 @@ async def send_alert_flag(payload: AlertFlagPayload):
     return {"queued": True, "webhook_configured": bool(N8N_WEBHOOK_URL)}
 
 
+def _build_history_state(feed: list[dict]) -> dict:
+    stats = {
+        "total": 0,
+        "flagged": 0,
+        "flagged_amount": 0.0,
+        "false_positives": 0,
+        "confirmed_fraud": 0,
+        "rings_detected": 0,
+        "avg_latency_ms": 0.0,
+    }
+
+    nodes: dict[str, str] = {}
+    edges: set[tuple[str, str]] = set()
+    device_user_events: dict[str, list[tuple[str, datetime]]] = defaultdict(list)
+    active_ring_devices: set[str] = set()
+    ring_alerts: list[dict] = []
+
+    for item in reversed(feed):
+        txn = item.get("transaction") or {}
+        timestamp = txn.get("timestamp")
+        if not timestamp:
+            continue
+
+        stats["total"] += 1
+        if item.get("is_flagged"):
+            stats["flagged"] += 1
+            stats["flagged_amount"] += float(item.get("transaction", {}).get("amount", 0) or 0)
+
+        user_id = txn.get("user_id")
+        device_id = txn.get("device_id")
+        if not user_id or not device_id:
+            continue
+
+        nodes[user_id] = "user"
+        nodes[device_id] = "device"
+        edges.add((user_id, device_id))
+
+        now = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        events = device_user_events[device_id]
+        events.append((user_id, now))
+        cutoff = now - graph_detector.timedelta(minutes=graph_detector.RING_WINDOW_MINUTES)
+        events[:] = [(u, t) for (u, t) in events if t >= cutoff]
+        distinct_users = sorted({u for u, _ in events})
+
+        device_has_ring = len(distinct_users) >= graph_detector.RING_USER_THRESHOLD
+        if device_has_ring and device_id not in active_ring_devices:
+            active_ring_devices.add(device_id)
+            ring_alerts.append({
+                "device_id": device_id,
+                "linked_users": distinct_users,
+                "detected_at": timestamp,
+            })
+            stats["rings_detected"] += 1
+        elif not device_has_ring and device_id in active_ring_devices:
+            active_ring_devices.remove(device_id)
+
+    avg_latency = (0.0 if stats["total"] == 0 else round(stats["avg_latency_ms"] / stats["total"], 1))
+    stats["flagged_amount"] = round(stats["flagged_amount"], 2)
+    stats["flag_rate"] = round((stats["flagged"] / stats["total"]) if stats["total"] else 0.0, 4)
+    stats["avg_latency_ms"] = avg_latency
+
+    return {
+        "stats": stats,
+        "graph": {
+            "nodes": [{"id": node_id, "type": node_type} for node_id, node_type in nodes.items()],
+            "edges": [{"source": u, "target": v} for u, v in edges],
+            "ring_device_count": len(active_ring_devices),
+            "ring_user_count": len({u for device_id in active_ring_devices for u, _ in device_user_events.get(device_id, [])}),
+            "ring_device_ids": sorted(active_ring_devices),
+            "ring_user_ids": sorted({u for device_id in active_ring_devices for u, _ in device_user_events.get(device_id, [])}),
+        },
+        "ring_alerts": ring_alerts,
+    }
+
+
+def _rebuild_server_state_from_history(history: list[dict]) -> None:
+    graph_detector.reset()
+    stats.reset()
+
+    for item in reversed(history):
+        txn_data = item.get("transaction") or {}
+        if not txn_data:
+            continue
+        txn = Transaction(**txn_data)
+        is_flagged = bool(item.get("is_flagged"))
+        stats.record_transaction(txn, is_flagged, 0.0)
+
+        _, ring_alert = graph_detector.update_graph(txn.user_id, txn.device_id, txn.timestamp)
+        if ring_alert:
+            stats.record_ring()
+
+
+@app.on_event("startup")
+async def load_history_state_on_startup():
+    if not is_supabase_configured():
+        logger.info("Supabase not configured; skipping startup history reconstruction")
+        return
+
+    try:
+        history = await fetch_transactions(limit=30)
+        if history:
+            _rebuild_server_state_from_history(history)
+            logger.info("Rebuilt engine state from %d historical transactions", len(history))
+        else:
+            logger.info("No historical transactions found for startup state reconstruction")
+    except Exception as exc:
+        logger.error("Failed to rebuild engine state from history on startup: %s", exc)
+
+
 @app.get("/supabase-status")
 async def supabase_status():
     status = await check_supabase_connection()
@@ -452,7 +565,14 @@ async def supabase_status():
 
 @app.get("/transactions/history")
 async def transactions_history(limit: int = 40):
-    return await fetch_transactions(limit=limit)
+    history = await fetch_transactions(limit=limit)
+    state = _build_history_state(history)
+    return {
+        "feed": history,
+        "stats": state["stats"],
+        "graph": state["graph"],
+        "ring_alerts": state["ring_alerts"],
+    }
 
 
 @app.post("/feedback")

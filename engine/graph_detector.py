@@ -112,3 +112,10 @@ def snapshot():
         "ring_device_ids": sorted(_active_ring_devices),
         "ring_user_ids": sorted(active_ring_users),
     }
+
+
+def reset() -> None:
+    """Clear the live fraud ring graph and rolling device-user history."""
+    graph.clear()
+    _device_user_events.clear()
+    _active_ring_devices.clear()

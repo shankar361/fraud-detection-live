@@ -69,10 +69,24 @@ export function useFraudStream() {
       .catch(() => {});
 
     fetch(`${BASE_HTTP_URL}/transactions/history?limit=${MAX_FEED_ROWS}`)
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (!Array.isArray(data)) return;
-        setFeed(data);
+        if (!data || !Array.isArray(data.feed)) return;
+        setFeed(data.feed.slice(0, MAX_FEED_ROWS));
+        setStats(data.stats || {});
+        if (data.graph) {
+          setGraphNodes(Array.isArray(data.graph.nodes) ? data.graph.nodes : []);
+          setGraphEdges(Array.isArray(data.graph.edges) ? data.graph.edges : []);
+          if (Array.isArray(data.graph.ring_device_ids)) {
+            setRingDeviceIds(new Set(data.graph.ring_device_ids));
+          }
+          if (Array.isArray(data.graph.ring_user_ids)) {
+            setRingUserIds(new Set(data.graph.ring_user_ids));
+          }
+        }
+        if (Array.isArray(data.ring_alerts)) {
+          setRingAlerts(data.ring_alerts);
+        }
       })
       .catch(() => {});
   }, []);
@@ -152,11 +166,16 @@ export function useFraudStream() {
 
       if (!item || !item.transaction) return;
 
+      const txnId = item.transaction.transaction_id;
+      if (!txnId) return;
+
       if (!msg.stats) {
         setStats((s) => ({
           ...s,
           total: s.total + 1,
           flagged: s.flagged + (item.is_flagged ? 1 : 0),
+          flagged_amount: Math.round((s.flagged_amount || 0) + (item.is_flagged ? item.transaction.amount : 0)),
+          flag_rate: Math.round(((s.flagged + (item.is_flagged ? 1 : 0)) / (s.total + 1)) * 10000) / 10000,
         }));
       }
 
@@ -167,7 +186,13 @@ export function useFraudStream() {
         });
       }
 
-      setFeed((prev) => [item, ...prev].slice(0, MAX_FEED_ROWS));
+      setFeed((prev) => {
+        const exists = prev.some((existing) => existing.transaction?.transaction_id === txnId);
+        if (exists) {
+          return prev;
+        }
+        return [item, ...prev].slice(0, MAX_FEED_ROWS);
+      });
 
       if (item.is_flagged) {
         setAlerts((prev) => [item, ...prev].slice(0, MAX_ALERTS));

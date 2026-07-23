@@ -32,6 +32,7 @@ import httpx
 
 from schemas import Location, Transaction, RiskResult, FeedbackPayload, AlertFlagPayload, RingAlert, GraphDelta
 from rules import score_transaction, get_rule_settings, save_rule_settings
+from supabase import persist_transaction, is_supabase_configured, check_supabase_connection
 import graph_detector
 from llm_explainer import explain_flag
 
@@ -212,6 +213,16 @@ async def _process_transaction(txn: Transaction) -> RiskResult:
         alert_body = _build_alert_payload(txn, score, is_flagged, reasons, explanation)
         asyncio.create_task(_fire_n8n_alert(alert_body))
 
+    transaction_payload = json.loads(result.model_dump_json())
+    logger.info("Scheduling Supabase transaction save %s", transaction_payload.get("transaction_id"))
+    task = asyncio.create_task(persist_transaction(transaction_payload))
+    task.add_done_callback(
+        lambda t: logger.info(
+            "Supabase transaction save task finished for %s: %s",
+            transaction_payload.get("transaction_id"),
+            "OK" if t.exception() is None else f"ERROR: {t.exception()}"
+        )
+    )
     return result
 
 
@@ -414,77 +425,9 @@ async def save_rule_settings_endpoint(settings: dict):
 
 @app.post("/transactions", response_model=RiskResult)
 async def ingest_transaction(txn: Transaction):
-    start = time.perf_counter()
-
-    score, reasons, triggered = score_transaction(txn)
-
-    # --- fraud ring check: reasons about the RELATIONSHIP between accounts,
-    # not just this one transaction, so it can catch things the rules above
-    # never could (see graph_detector.py docstring) ---
-    delta, ring_alert = graph_detector.update_graph(txn.user_id, txn.device_id, txn.timestamp)
-    ring_flag = None
-    if ring_alert:
-        ring_flag = RingAlert(**ring_alert)
-        linked = ", ".join(ring_alert["linked_users"])
-        reasons = reasons + [
-            f"Device shared by {len(ring_alert['linked_users'])} distinct users in the last "
-            f"{graph_detector.RING_WINDOW_MINUTES} min: {linked}"
-        ]
-        triggered = triggered + ["fraud_ring"]
-        score = max(score, RING_FORCE_SCORE)
-        stats.record_ring()
-
-    is_flagged = score >= _get_flag_threshold()
-
-    explanation = None
-    if is_flagged:
-        explanation = await explain_flag(
-            user_id=txn.user_id,
-            amount=txn.amount,
-            merchant=txn.merchant,
-            reasons=reasons,
-        )
-
-    latency_ms = (time.perf_counter() - start) * 1000
-    stats.record_transaction(txn, is_flagged, latency_ms)
-
-    result = RiskResult(
-        transaction=txn,
-        risk_score=round(score, 3),
-        is_flagged=is_flagged,
-        reasons=reasons,
-        triggered_rules=triggered,
-        explanation=explanation,
-        ring_flag=ring_flag,
-    )
-
-    await manager.broadcast({
-        "type": "transaction",
-        "data": json.loads(result.model_dump_json()),
-        "stats": stats.snapshot(),
-    })
-
-    if delta["nodes"] or delta["edges"] or ring_alert:
-        snapshot = graph_detector.snapshot()
-        graph_payload = GraphDelta(
-            nodes=delta["nodes"],
-            edges=delta["edges"],
-            ring_alert=ring_flag,
-            ring_device_count=snapshot["ring_device_count"],
-            ring_user_count=snapshot["ring_user_count"],
-            ring_device_ids=snapshot["ring_device_ids"],
-            ring_user_ids=snapshot["ring_user_ids"],
-        )
-        await manager.broadcast({
-            "type": "graph",
-            "data": json.loads(graph_payload.model_dump_json()),
-        })
-
-    # --- n8n alert: fire-and-forget, never blocks the response ---
-    if is_flagged:
-        alert_body = _build_alert_payload(txn, score, is_flagged, reasons, explanation)
-        asyncio.create_task(_fire_n8n_alert(alert_body))
-
+    logger.info("/transactions request received txn=%s user=%s amount=%s", txn.transaction_id, txn.user_id, txn.amount)
+    result = await _process_transaction(txn)
+    logger.info("/transactions request completed txn=%s is_flagged=%s", txn.transaction_id, result.is_flagged)
     return result
 
 
@@ -499,6 +442,12 @@ async def send_alert_flag(payload: AlertFlagPayload):
     body = json.loads(payload.model_dump_json())
     asyncio.create_task(_fire_n8n_alert(body))
     return {"queued": True, "webhook_configured": bool(N8N_WEBHOOK_URL)}
+
+
+@app.get("/supabase-status")
+async def supabase_status():
+    status = await check_supabase_connection()
+    return status
 
 
 @app.post("/feedback")

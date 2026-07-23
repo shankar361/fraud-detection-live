@@ -11,12 +11,19 @@ survives restarts and scales across multiple engine instances.
 
 import json
 import math
+import os
+import tempfile
 from datetime import datetime
 from collections import defaultdict, deque
 from pathlib import Path
+import httpx
 from schemas import Transaction
 
 RULE_SETTINGS_PATH = Path(__file__).resolve().parent / "rule_settings.json"
+FALLBACK_RULE_SETTINGS_PATH = Path(tempfile.gettempdir()) / "rule_settings.json"
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+SUPABASE_RULE_SETTINGS_TABLE = "rule_settings"
 
 DEFAULT_RULE_SETTINGS = {
     "flag_threshold_pct": 40.0,
@@ -96,27 +103,91 @@ def _parse_ts(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
 
-def _load_rule_settings() -> dict:
+def _get_supabase_headers() -> dict[str, str] | None:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return None
+    return {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+
+
+def _load_rule_settings_from_supabase() -> dict | None:
+    headers = _get_supabase_headers()
+    if not headers:
+        return None
+
+    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_RULE_SETTINGS_TABLE}?id=eq.default&select=config"
     try:
-        with RULE_SETTINGS_PATH.open("r", encoding="utf-8") as f:
-            loaded = json.load(f)
-        if not isinstance(loaded, dict) or "rules" not in loaded:
-            raise ValueError("Invalid rule settings format")
-        return loaded
+        response = httpx.get(url, headers=headers, timeout=10.0)
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, list) and data:
+            config = data[0].get("config")
+            if isinstance(config, dict) and "rules" in config:
+                return config
     except Exception:
-        return DEFAULT_RULE_SETTINGS.copy()
+        pass
+    return None
+
+
+def _load_rule_settings() -> dict:
+    settings = _load_rule_settings_from_supabase()
+    if settings is not None:
+        return settings
+
+    for path in (RULE_SETTINGS_PATH, FALLBACK_RULE_SETTINGS_PATH):
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if not isinstance(loaded, dict) or "rules" not in loaded:
+                raise ValueError("Invalid rule settings format")
+            return loaded
+        except Exception:
+            continue
+
+    return DEFAULT_RULE_SETTINGS.copy()
 
 
 def get_rule_settings() -> dict:
     return RULE_SETTINGS
 
 
+def _save_rule_settings_to_supabase(settings: dict) -> bool:
+    headers = _get_supabase_headers()
+    if not headers:
+        return False
+
+    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_RULE_SETTINGS_TABLE}"
+    payload = [{"id": "default", "config": settings}]
+    headers["Prefer"] = "resolution=merge-duplicates"
+
+    try:
+        response = httpx.post(url, headers=headers, json=payload, timeout=10.0)
+        response.raise_for_status()
+        return True
+    except Exception:
+        return False
+
+
 def save_rule_settings(settings: dict) -> dict:
     global RULE_SETTINGS
-    with RULE_SETTINGS_PATH.open("w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2)
-    RULE_SETTINGS = _load_rule_settings()
-    return RULE_SETTINGS
+    if _save_rule_settings_to_supabase(settings):
+        RULE_SETTINGS = settings
+        return RULE_SETTINGS
+
+    try:
+        with RULE_SETTINGS_PATH.open("w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+        RULE_SETTINGS = _load_rule_settings()
+        return RULE_SETTINGS
+    except Exception:
+        with FALLBACK_RULE_SETTINGS_PATH.open("w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+        RULE_SETTINGS = settings
+        return RULE_SETTINGS
 
 
 RULE_SETTINGS = _load_rule_settings()

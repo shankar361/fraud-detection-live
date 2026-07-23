@@ -31,7 +31,7 @@ import logging
 import httpx
 
 from schemas import Location, Transaction, RiskResult, FeedbackPayload, AlertFlagPayload, RingAlert, GraphDelta
-from rules import score_transaction
+from rules import score_transaction, get_rule_settings, save_rule_settings
 import graph_detector
 from llm_explainer import explain_flag
 
@@ -58,6 +58,13 @@ app.add_middleware(
 
 FLAG_THRESHOLD = 0.4
 RING_FORCE_SCORE = 0.9
+
+
+def _get_flag_threshold() -> float:
+    settings = get_rule_settings()
+    pct = settings.get("flag_threshold_pct", FLAG_THRESHOLD * 100)
+    return max(0.0, min(100.0, pct)) / 100.0
+
 
 async def _fire_n8n_alert(body: dict) -> None:
     """Fire-and-forget: POST transaction data to the n8n webhook.
@@ -146,7 +153,7 @@ async def _process_transaction(txn: Transaction) -> RiskResult:
         score = max(score, RING_FORCE_SCORE)
         stats.record_ring()
 
-    is_flagged = score >= FLAG_THRESHOLD
+    is_flagged = score >= _get_flag_threshold()
     explanation = None
     if is_flagged:
         explanation = await explain_flag(
@@ -384,6 +391,17 @@ async def get_stats():
     return stats.snapshot()
 
 
+@app.get("/rule-settings")
+async def get_rule_settings_endpoint():
+    return get_rule_settings()
+
+
+@app.post("/rule-settings")
+async def save_rule_settings_endpoint(settings: dict):
+    updated = save_rule_settings(settings)
+    return {"settings": updated}
+
+
 @app.post("/transactions", response_model=RiskResult)
 async def ingest_transaction(txn: Transaction):
     start = time.perf_counter()
@@ -406,7 +424,7 @@ async def ingest_transaction(txn: Transaction):
         score = max(score, RING_FORCE_SCORE)
         stats.record_ring()
 
-    is_flagged = score >= FLAG_THRESHOLD
+    is_flagged = score >= _get_flag_threshold()
 
     explanation = None
     if is_flagged:

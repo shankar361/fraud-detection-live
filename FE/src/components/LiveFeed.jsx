@@ -82,15 +82,68 @@ function TxnRow({ result, isExpanded, onToggle }) {
 
 export default function LiveFeed({ feed }) {
   const [expandedTxnId, setExpandedTxnId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [userFilter, setUserFilter] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const handleToggle = (id) => {
     setExpandedTxnId((prevId) => (prevId === id ? null : id));
   };
 
+  const filteredFeed = feed.filter((result) => {
+    if (!result || !result.transaction) return false;
+    const { transaction, is_flagged } = result;
+    if (statusFilter === "flagged" && !is_flagged) return false;
+    if (statusFilter === "normal" && is_flagged) return false;
+
+    if (userFilter.trim() && !transaction.user_id.toLowerCase().includes(userFilter.trim().toLowerCase())) {
+      return false;
+    }
+
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return true;
+
+    return [
+      transaction.user_id,
+      transaction.merchant,
+      transaction.merchant_category,
+      transaction.location.city,
+      transaction.payment_method,
+    ].some((value) => value?.toString().toLowerCase().includes(query));
+  });
+
   return (
     <div className="feed-col">
       <div className="col-title">
         <span>LIVE TRANSACTION FEED</span>
+      </div>
+      <div className="feed-filters">
+        <div className="filter-group">
+          <label>Status</label>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">All</option>
+            <option value="flagged">Only flagged</option>
+            <option value="normal">Only non-flagged</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>User</label>
+          <input
+            type="text"
+            placeholder="Filter by user id"
+            value={userFilter}
+            onChange={(event) => setUserFilter(event.target.value)}
+          />
+        </div>
+        <div className="filter-group stretch">
+          <label>Search</label>
+          <input
+            type="text"
+            placeholder="Search merchant, city, payment method"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+          />
+        </div>
       </div>
       <div className="txn-header">
         <span>Time</span>
@@ -102,10 +155,10 @@ export default function LiveFeed({ feed }) {
         <span>Risk</span>
         <span>Signals</span>
       </div>
-      {feed.length === 0 && (
-        <div className="empty-state">Waiting for transactions…</div>
+      {filteredFeed.length === 0 && (
+        <div className="empty-state">No transactions match the current filter.</div>
       )}
-      {feed.map((result) => {
+      {filteredFeed.map((result) => {
         const txnId = result?.transaction?.transaction_id;
         if (!txnId) return null;
         return (

@@ -1,0 +1,39 @@
+{
+  "rules": {
+    "velocity": {
+      "enabled": true,
+      "weight": 0.45,
+      "window_seconds": 60,
+      "max_txns": 8
+    },
+    "impossible_travel": {
+      "enabled": true,
+      "weight": 0.45,
+      "max_speed_kmh": 900,
+      "min_distance_km": 50
+    },
+    "amount_deviation": {
+      "enabled": true,
+      "weight": 0.4,
+      "zscore_threshold": 3
+    },
+    "transaction_distance": {
+      "enabled": true,
+      "weight": 0.25,
+      "min_distance_km": 500
+    },
+    "new_payment_method": {
+      "enabled": true,
+      "weight": 0.2
+    },
+    "new_merchant_category": {
+      "enabled": true,
+      "weight": 0.15
+    },
+    "country_mismatch": {
+      "enabled": false,
+      "weight": 0.25
+    }
+  },
+  "flag_threshold_pct": 50
+}

@@ -1,5 +1,7 @@
+import { useState } from "react";
 import Header from "./components/Header";
 import DemoControls from "./components/DemoControls";
+import RuleSettings from "./components/RuleSettings";
 import LiveFeed from "./components/LiveFeed";
 import AlertsPanel from "./components/AlertsPanel";
 import GraphPanel from "./components/GraphPanel";
@@ -7,6 +9,7 @@ import { useFraudStream } from "./hooks/useFraudStream";
 import "./App.css";
 
 export default function App() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const {
     connected,
     feed,
@@ -22,8 +25,13 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header connected={connected} stats={stats} />
+      <Header
+        connected={connected}
+        stats={stats}
+        onToggleSettings={() => setSettingsOpen((open) => !open)}
+      />
       <DemoControls />
+      <RuleSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <main>
         <LiveFeed feed={feed} />
         <AlertsPanel alerts={alerts} onFeedback={sendFeedback} />

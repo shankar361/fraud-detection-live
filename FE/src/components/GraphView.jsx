@@ -103,8 +103,14 @@ export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds, on
     const simLinks = edges
       .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
       .map((edge) => ({ source: edge.source, target: edge.target }));
+    const connectedIds = new Set();
+    simLinks.forEach((edge) => {
+      connectedIds.add(edge.source);
+      connectedIds.add(edge.target);
+    });
+    const connectedNodes = simNodes.filter((node) => connectedIds.has(node.id));
 
-    simulation.nodes(simNodes);
+    simulation.nodes(connectedNodes);
     simulation.force("link").links(simLinks);
     simulation.alpha(0.6).restart();
 
@@ -116,7 +122,7 @@ export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds, on
     link.enter().append("line").attr("class", "graph-edge");
 
     // nodes
-    const node = nodeGroup.selectAll("g.node").data(simNodes, (d) => d.id);
+    const node = nodeGroup.selectAll("g.node").data(connectedNodes, (d) => d.id);
     node.exit().remove();
 
     const nodeEnter = node.enter().append("g").attr("class", "node");

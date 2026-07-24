@@ -18,6 +18,32 @@ const FEEDBACK_URL = `${BASE_HTTP_URL}/feedback`;
 const GRAPH_URL = `${BASE_HTTP_URL}/graph`;
 const MAX_FEED_ROWS = 30;
 const MAX_ALERTS = 15;
+
+function normalizeGraph(nodes, edges) {
+  const nodeById = new Map(
+    nodes
+      .filter((node) => node && typeof node.id === "string" && (node.type === "user" || node.type === "device"))
+      .map((node) => [node.id, node]),
+  );
+
+  const validEdges = edges.filter((edge) => {
+    const source = nodeById.get(edge?.source);
+    const target = nodeById.get(edge?.target);
+    return source && target && source.type !== target.type;
+  });
+
+  const connectedIds = new Set();
+  validEdges.forEach((edge) => {
+    connectedIds.add(edge.source);
+    connectedIds.add(edge.target);
+  });
+
+  return {
+    nodes: [...nodeById.values()].filter((node) => connectedIds.has(node.id)),
+    edges: validEdges,
+  };
+}
+
 console.log("WS_URL", WS_URL);
 console.log("BASE_HTTP_URL", BASE_HTTP_URL);
 console.log("FEEDBACK_URL", FEEDBACK_URL);
@@ -221,14 +247,16 @@ export function useFraudStream() {
     });
   }, []);
 
+  const normalizedGraph = normalizeGraph(graphNodes, graphEdges);
+
   return {
     connected,
     feed,
     alerts,
     stats,
     sendFeedback,
-    graphNodes,
-    graphEdges,
+    graphNodes: normalizedGraph.nodes,
+    graphEdges: normalizedGraph.edges,
     ringDeviceIds,
     ringUserIds,
     ringAlerts,

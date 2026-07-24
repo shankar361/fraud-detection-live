@@ -9,6 +9,7 @@ A live fraud detection demo built for hackathon presentation.
 - Streams live results to a React dashboard via WebSockets.
 - Provides human-readable AI explanations for flagged alerts.
 - Lets analysts mark false positives and re-fire alert webhooks.
+- sends alert to admin/user on whatsapp or telegram for fraud transactions
 
 ## Why it stands out
 
@@ -21,7 +22,7 @@ A live fraud detection demo built for hackathon presentation.
 
 - `engine/` - FastAPI backend, fraud rules, ring detection, LLM explainer, API endpoints.
 - `FE/` - React dashboard with live feed, alert panel, graph visualization, and feedback buttons.
-- `generator/` - Synthetic transaction stream simulator for live demo scenarios.
+- `generator/` - Synthetic transaction stream simulator for live demo scenarios. this can be run manually also. but its beging trigger from n8n telegram trigger. so I just send a message on telegram or whatsapp and it generates the transactions
 
 ## Setup
 
@@ -47,6 +48,8 @@ Create a `.env` file in the repository root with the following values:
 OPENAI_API_KEY=your_openai_api_key
 N8N_WEBHOOK_URL=https://example.com/webhook
 ENGINE_URL=http://localhost:8000/transactions
+SUPABASE_URL=https://url.supabase.co
+SUPABASE_KEY=key
 ```
 
 - `OPENAI_API_KEY` enables human-like alert explanations.
@@ -70,6 +73,17 @@ The backend exposes:
 - `GET /stats` - runtime metrics
 - `GET /health` - status check
 - `WS /ws` - live dashboard stream
+-  GET /auth/statusAuth Status
+-  POST /auth/signin Auth Signin
+-  POST /auth/signup Auth Signup
+-  GET /auth/me Auth Me
+-  POST /demo/ring    Demo Ring Attack
+-  GET  /rule-settingsGet Rule Settings Endpoint
+-  POST /rule-settingsSave Rule Settings Endpoint
+-  POST /demo/anomaly    Demo Anomaly Injection
+-  GET /supabase-status Supabase Status
+-  GET /transactions/history Transactions History
+-  GET / Root - just to show backend is running
 
 ## Running the generator
 

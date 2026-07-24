@@ -81,7 +81,7 @@ export default function RuleSettings({
     },
   };
 
-  const drawerTitle = activeTab === "menu" ? "Menu" : tabConfig[activeTab]?.title;
+  const drawerTitle = activeTab === "menu" ? "Fraud Detection Contorls" : tabConfig[activeTab]?.title;
   const drawerDescription = activeTab === "menu"
     ? "Choose one of the three menu options to continue."
     : tabConfig[activeTab]?.description;

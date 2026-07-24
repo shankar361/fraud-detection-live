@@ -79,7 +79,10 @@ export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds, on
 
   // --- data changed: merge in new nodes/edges, restart the simulation ---
   useEffect(() => {
-    const { simulation, linkGroup, nodeGroup } = stateRef.current;
+    const state = stateRef.current;
+    if (!state) return;
+
+    const { simulation, linkGroup, nodeGroup } = state;
     const nodeMap = nodeMapRef.current;
 
     const simNodes = nodes.map((n) => {
@@ -96,7 +99,10 @@ export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds, on
       return datum;
     });
 
-    const simLinks = edges.map((e) => ({ source: e.source, target: e.target }));
+    const nodeIds = new Set(simNodes.map((node) => node.id));
+    const simLinks = edges
+      .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+      .map((edge) => ({ source: edge.source, target: edge.target }));
 
     simulation.nodes(simNodes);
     simulation.force("link").links(simLinks);

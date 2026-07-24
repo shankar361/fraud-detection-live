@@ -54,17 +54,43 @@ export default function GraphView({ nodes, edges, ringDeviceIds, ringUserIds, on
 
     const zoom = d3
       .zoom()
-      .scaleExtent([0.4, 2.5])
+      .scaleExtent([0.1, 2.5])
       .on("zoom", (event) => g.attr("transform", event.transform));
 
     svg.call(zoom);
 
-    const resetZoom = () => {
-      svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+    const fitToView = () => {
+      const padding = 36;
+      const nodeRadius = 10;
+      const positionedNodes = simulation.nodes().filter(
+        (node) => Number.isFinite(node.x) && Number.isFinite(node.y),
+      );
+
+      if (positionedNodes.length === 0) {
+        svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+        return;
+      }
+
+      const minX = d3.min(positionedNodes, (node) => node.x) - nodeRadius;
+      const maxX = d3.max(positionedNodes, (node) => node.x) + nodeRadius;
+      const minY = d3.min(positionedNodes, (node) => node.y) - nodeRadius;
+      const maxY = d3.max(positionedNodes, (node) => node.y) + nodeRadius;
+      const scale = Math.min(
+        (WIDTH - padding * 2) / Math.max(maxX - minX, 1),
+        (HEIGHT - padding * 2) / Math.max(maxY - minY, 1),
+      );
+      const transform = d3.zoomIdentity
+        .translate(
+          (WIDTH - scale * (minX + maxX)) / 2,
+          (HEIGHT - scale * (minY + maxY)) / 2,
+        )
+        .scale(scale);
+
+      svg.transition().duration(300).call(zoom.transform, transform);
     };
 
     if (typeof onZoomControlReady === "function") {
-      onZoomControlReady({ reset: resetZoom });
+      onZoomControlReady({ reset: fitToView });
     }
 
     stateRef.current = { simulation, linkGroup, nodeGroup, zoom };

@@ -28,6 +28,50 @@ def _get_supabase_headers() -> dict[str, str] | None:
     }
 
 
+def _get_supabase_auth_headers(access_token: str | None = None) -> dict[str, str]:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        raise RuntimeError("Supabase authentication is not configured")
+
+    return {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {access_token or SUPABASE_SERVICE_KEY}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+
+
+async def sign_in_with_password(email: str, password: str) -> dict:
+    url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            url,
+            headers=_get_supabase_auth_headers(),
+            json={"email": email, "password": password},
+        )
+    response.raise_for_status()
+    return response.json()
+
+
+async def sign_up_with_password(email: str, password: str) -> dict:
+    url = f"{SUPABASE_URL}/auth/v1/signup"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            url,
+            headers=_get_supabase_auth_headers(),
+            json={"email": email, "password": password},
+        )
+    response.raise_for_status()
+    return response.json()
+
+
+async def fetch_authenticated_user(access_token: str) -> dict:
+    url = f"{SUPABASE_URL}/auth/v1/user"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(url, headers=_get_supabase_auth_headers(access_token))
+    response.raise_for_status()
+    return response.json()
+
+
 def fetch_rule_settings() -> dict | None:
     headers = _get_supabase_headers()
     if not headers:

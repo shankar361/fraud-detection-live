@@ -13,7 +13,7 @@ export default function GraphPanel({ graphNodes, graphEdges, ringDeviceIds, ring
           <span className="rings-count">{ringsDetected} ring{ringsDetected === 1 ? "" : "s"} detected</span>
         </div>
         <div className="graph-controls">
-          <button type="button" onClick={() => resetZoomRef.current?.reset()}>Reset zoom</button>
+          <button type="button" onClick={() => resetZoomRef.current?.reset()}>Fit all nodes</button>
         </div>
         <div className="graph-summary">
           <span>{graphNodes.length} nodes</span>

@@ -23,8 +23,9 @@ import random
 import uuid
 from datetime import datetime, timezone
 from collections import defaultdict
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from typing import List
 import json
 import os
@@ -33,7 +34,15 @@ import httpx
 
 from schemas import Location, Transaction, RiskResult, FeedbackPayload, AlertFlagPayload, RingAlert, GraphDelta
 from rules import score_transaction, get_rule_settings, save_rule_settings
-from supabase import persist_transaction, is_supabase_configured, check_supabase_connection, fetch_transactions
+from supabase import (
+    check_supabase_connection,
+    fetch_authenticated_user,
+    fetch_transactions,
+    is_supabase_configured,
+    persist_transaction,
+    sign_in_with_password,
+    sign_up_with_password,
+)
 import graph_detector
 from llm_explainer import explain_flag
 
@@ -72,10 +81,56 @@ FLAG_THRESHOLD = 0.4
 RING_FORCE_SCORE = 0.9
 
 
+class AuthPayload(BaseModel):
+    email: str
+    password: str
+
+
 def _get_flag_threshold() -> float:
     settings = get_rule_settings()
     pct = settings.get("flag_threshold_pct", FLAG_THRESHOLD * 100)
     return max(0.0, min(100.0, pct)) / 100.0
+
+
+async def require_rule_config_user(authorization: str | None = Header(default=None)) -> dict:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    access_token = authorization.split(" ", 1)[1].strip()
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        return await fetch_authenticated_user(access_token)
+    except RuntimeError as exc:
+        logger.error("Rule config auth unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="Supabase authentication is not configured") from exc
+    except httpx.HTTPStatusError as exc:
+        logger.warning("Rule config auth rejected: %s", exc.response.status_code)
+        raise HTTPException(status_code=401, detail="Invalid or expired session") from exc
+    except Exception as exc:
+        logger.error("Rule config auth failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired session") from exc
+
+
+def _auth_error_detail(exc: httpx.HTTPStatusError) -> str:
+    try:
+        body = exc.response.json()
+    except Exception:
+        return "Authentication failed"
+    return body.get("msg") or body.get("message") or body.get("error_description") or "Authentication failed"
+
+
+def _build_auth_response(data: dict) -> dict:
+    user = data.get("user") or data
+    response = {"user": user}
+    if data.get("access_token"):
+        response["access_token"] = data["access_token"]
+    if data.get("refresh_token"):
+        response["refresh_token"] = data["refresh_token"]
+    if not data.get("access_token"):
+        response["message"] = "Account created. Check your email to confirm it, then sign in."
+    return response
 
 
 async def _fire_n8n_alert(body: dict) -> None:
@@ -416,13 +471,45 @@ async def get_stats():
     return stats.snapshot()
 
 
+@app.get("/auth/status")
+async def auth_status():
+    return {"configured": is_supabase_configured()}
+
+
+@app.post("/auth/signin")
+async def auth_signin(payload: AuthPayload):
+    try:
+        data = await sign_in_with_password(payload.email, payload.password)
+        return _build_auth_response(data)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=_auth_error_detail(exc)) from exc
+
+
+@app.post("/auth/signup")
+async def auth_signup(payload: AuthPayload):
+    try:
+        data = await sign_up_with_password(payload.email, payload.password)
+        return _build_auth_response(data)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=_auth_error_detail(exc)) from exc
+
+
+@app.get("/auth/me")
+async def auth_me(user: dict = Depends(require_rule_config_user)):
+    return {"user": user}
+
+
 @app.get("/rule-settings")
-async def get_rule_settings_endpoint():
+async def get_rule_settings_endpoint(_user: dict = Depends(require_rule_config_user)):
     return get_rule_settings()
 
 
 @app.post("/rule-settings")
-async def save_rule_settings_endpoint(settings: dict):
+async def save_rule_settings_endpoint(settings: dict, _user: dict = Depends(require_rule_config_user)):
     updated = save_rule_settings(settings)
     return {"settings": updated}
 

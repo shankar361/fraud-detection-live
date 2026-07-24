@@ -40,14 +40,31 @@ const RULE_DESCRIPTIONS = {
     "Flags transactions from a different country than the user's prior activity.",
 };
 
-export default function RuleSettings({ open, onClose }) {
+export default function RuleSettings({
+  open,
+  onClose,
+  user,
+  accessToken,
+  authLoading,
+  authError,
+  onAuthenticate,
+  onSignOut,
+  supabaseConfigured,
+}) {
   const [activeTab, setActiveTab] = useState("menu");
   const [settings, setSettings] = useState(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [logoutMessage, setLogoutMessage] = useState("");
+  const [authMode, setAuthMode] = useState("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const isOpen = Boolean(open);
+  const hasRuleSession = Boolean(user && accessToken);
 
   const tabConfig = {
     rules: {
@@ -70,15 +87,43 @@ export default function RuleSettings({ open, onClose }) {
     : tabConfig[activeTab]?.description;
 
   useEffect(() => {
-    fetch(`${BACKEND_BASE}/rule-settings`)
-      .then((res) => res.ok ? res.json() : Promise.reject())
+    if (!hasRuleSession) {
+      setSettings(null);
+      setDirty(false);
+      setSaving(false);
+      return undefined;
+    }
+
+    if (!isOpen || activeTab !== "rules") {
+      return undefined;
+    }
+
+    let cancelled = false;
+    setSettingsLoading(true);
+    setMessage("");
+
+    fetch(`${BACKEND_BASE}/rule-settings`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(new Error("Unable to load rule settings")))
       .then((data) => {
+        if (cancelled) return;
         setSettings(data);
       })
       .catch(() => {
+        if (cancelled) return;
         setMessage("Unable to load rule settings from backend.");
+      })
+      .finally(() => {
+        if (!cancelled) setSettingsLoading(false);
       });
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, hasRuleSession, isOpen, accessToken]);
 
   const updateRule = (ruleId, field, value) => {
     setSettings((prev) => {
@@ -112,13 +157,21 @@ export default function RuleSettings({ open, onClose }) {
 
   const handleSave = async () => {
     if (!settings) return;
+    if (!accessToken) {
+      setMessage("Sign in before saving rule settings.");
+      return;
+    }
+
     setSaving(true);
     setMessage("");
 
     try {
       const response = await fetch(`${BACKEND_BASE}/rule-settings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify(settings),
       });
       if (!response.ok) {
@@ -128,30 +181,22 @@ export default function RuleSettings({ open, onClose }) {
       setSettings(result.settings || settings);
       setDirty(false);
       setMessage("Rule settings saved successfully.");
-    } catch (error) {
+    } catch {
       setMessage("Failed to save rule settings. Try again.");
     } finally {
       setSaving(false);
     }
   };
 
-  if (!settings) {
-    const loadingTitle = activeTab === "menu" ? "Menu" : tabConfig[activeTab]?.title;
-    return (
-      <>
-        <div className={`settings-backdrop ${isOpen ? "visible" : ""}`} onClick={onClose} />
-        <section className={`settings-panel drawer ${isOpen ? "open" : ""}`}>
-          <div className="settings-drawer-header">
-            <div>
-              <div className="panel-title">{loadingTitle}</div>
-              <div className="panel-description">Loading rule settings…</div>
-            </div>
-            <button className="close-settings-button" onClick={onClose} aria-label="Close rule settings">✕</button>
-          </div>
-        </section>
-      </>
-    );
-  }
+  const handleAuthenticate = async (event) => {
+    event.preventDefault();
+    setAuthSubmitting(true);
+    setAuthMessage("");
+    const result = await onAuthenticate(authEmail, authPassword, authMode);
+    if (result?.message) setAuthMessage(result.message);
+    if (result?.success) setAuthPassword("");
+    setAuthSubmitting(false);
+  };
 
   return (
     <>
@@ -175,7 +220,7 @@ export default function RuleSettings({ open, onClose }) {
             {activeTab === "rules" && (
               <button
                 className="save-settings-button"
-                disabled={!dirty || saving}
+                disabled={!dirty || saving || !hasRuleSession}
                 onClick={handleSave}
               >
                 {saving ? "Saving…" : "Save"}
@@ -218,19 +263,26 @@ export default function RuleSettings({ open, onClose }) {
                 <button
                   type="button"
                   className="logout-button"
-                  onClick={() => {
-                    setLogoutMessage("Logged out. Reloading app...");
-                    window.location.reload();
+                  onClick={async () => {
+                    await onSignOut();
+                    setActiveTab("menu");
+                    setLogoutMessage("You have been logged out.");
                   }}
                 >
-                  Logout now
+                  Logout {user?.email ? `(${user.email})` : "now"}
                 </button>
                 {logoutMessage && <div className="logout-message">{logoutMessage}</div>}
               </div>
             )}
 
             {activeTab === "rules" && (
-              <>
+              hasRuleSession ? (
+                settingsLoading || !settings ? (
+                  <div className="settings-loading">
+                    <div className="panel-title">Loading rules</div>
+                    <div className="panel-description">Checking your session and loading rule settings...</div>
+                  </div>
+                ) : <>
                 <div className="rule-field global-field">
                   <label>Flag threshold (%)</label>
                   <input
@@ -288,7 +340,58 @@ export default function RuleSettings({ open, onClose }) {
                     </div>
                   ))}
                 </div>
-              </>
+              </>) : (
+                <div className="auth-panel">
+                  <div className="panel-title">Authentication required</div>
+                  <div className="panel-description">
+                    Sign in to change fraud detection rules.
+                  </div>
+                  {!supabaseConfigured ? (
+                    <p className="auth-message error">Supabase authentication is not configured.</p>
+                  ) : authLoading ? (
+                    <p className="auth-message">Checking your session…</p>
+                  ) : (
+                    <form className="auth-form" onSubmit={handleAuthenticate}>
+                      <label>
+                        Email
+                        <input
+                          type="email"
+                          value={authEmail}
+                          onChange={(event) => setAuthEmail(event.target.value)}
+                          autoComplete="email"
+                          required
+                        />
+                      </label>
+                      <label>
+                        Password
+                        <input
+                          type="password"
+                          value={authPassword}
+                          onChange={(event) => setAuthPassword(event.target.value)}
+                          autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+                          minLength={6}
+                          required
+                        />
+                      </label>
+                      <button type="submit" className="auth-submit" disabled={authSubmitting}>
+                        {authSubmitting ? "Working…" : authMode === "signup" ? "Create account" : "Sign in"}
+                      </button>
+                      <button
+                        type="button"
+                        className="auth-mode-toggle"
+                        onClick={() => {
+                          setAuthMode((mode) => mode === "signin" ? "signup" : "signin");
+                          setAuthMessage("");
+                        }}
+                      >
+                        {authMode === "signup" ? "Already have an account? Sign in" : "Need an account? Create one"}
+                      </button>
+                      {authError && <p className="auth-message error">{authError}</p>}
+                      {authMessage && <p className="auth-message">{authMessage}</p>}
+                    </form>
+                  )}
+                </div>
+              )
             )}
 
             {message && <div className="settings-message">{message}</div>}

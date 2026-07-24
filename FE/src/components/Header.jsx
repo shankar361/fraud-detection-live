@@ -17,7 +17,7 @@ export default function Header({ connected, stats, onToggleSettings }) {
           <div>
             <h1>Live fraud detection</h1>
             <span className="status-text">
-              {connected ? "connected — streaming live" : "disconnected — retrying…"}
+              {connected ? "Connected — Streaming live" : "Disconnected — Retrying…"}
             </span>
           </div>
         </div>

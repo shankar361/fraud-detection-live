@@ -28,6 +28,7 @@
   border-bottom: 1px solid var(--panel-border);
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
   gap: 18px;
+  position: relative;
 }
 
 .header-top {
@@ -47,6 +48,9 @@
 }
 
 .settings-toggle {
+  position: absolute;
+  top: 16px;
+  right: 32px;
   border: none;
   background: transparent;
   font-size: 22px;
@@ -55,6 +59,7 @@
   padding: 10px;
   border-radius: 12px;
   transition: background 0.15s ease;
+  z-index: 5;
 }
 
 .settings-toggle:hover {
@@ -115,9 +120,7 @@
   max-width: 920px;
 }
 
-.settings-toggle {
-  align-self: start;
-}
+
 
 .metric-card {
   background: #f8fafc;
@@ -203,7 +206,7 @@ main {
   padding: 22px 26px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 18px;
   align-items: center;
 }
@@ -229,7 +232,7 @@ main {
 .demo-actions {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .settings-panel .demo-controls {
@@ -524,9 +527,7 @@ main {
     align-items: stretch;
   }
 
-  .settings-toggle {
-    align-self: flex-end;
-  }
+
 
   .stats-grid {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
@@ -546,6 +547,11 @@ main {
 @media (max-width: 640px) {
   .header {
     padding: 12px 16px;
+  }
+
+  .settings-toggle {
+    top: 12px;
+    right: 16px;
   }
 
   .header-top {
@@ -710,13 +716,17 @@ main {
 }
 
 .demo-button {
+  flex: 1;
   border: none;
   border-radius: 999px;
-  padding: 12px 20px;
+  padding: 12px 10px;
   font-weight: 700;
   color: #ffffff;
   cursor: pointer;
   transition: transform 0.15s ease, opacity 0.15s ease;
+  font-size: 13px;
+  white-space: normal;
+  text-align: center;
 }
 
 .demo-button:hover {

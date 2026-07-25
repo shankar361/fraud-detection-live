@@ -258,8 +258,8 @@ export default function RuleSettings({
             {activeTab === "logout" && (
               <div className="settings-panel-section logout-panel">
                 <div className="panel-title">Logout</div>
-                <div className="panel-description">Ready to leave the dashboard.</div>
-                <p>If your deployment supports authentication, use the logout button below.</p>
+                <div className="panel-description">Ready to leave the dashboard?</div>
+               
                 <button
                   type="button"
                   className="logout-button"
